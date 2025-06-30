@@ -68,8 +68,8 @@ def compute_structure_factor(config):
     F = np.fft.fftshift(np.fft.fft2(rho))
     return np.abs(F) ** 2
 
-# Compute the pair correlation function g(r)
-def compute_pair_correlation(config, n_bins=50):
+# Compute the radial distribution function g(r)
+def compute_rdf(config, n_bins=50):
     L = config.shape[0]
     particles = np.argwhere(config)
     # Compute all pairwise distances
@@ -120,6 +120,7 @@ def compute_total_energy(lattice, L):
 import os
 
 if __name__ == "__main__":
+    
  # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Lattice Gas Simulation")
     parser.add_argument('--visualize', action='store_true', help='Enable live visualization')
@@ -133,13 +134,16 @@ if __name__ == "__main__":
     # Simulation parameters
     L = 50  # Lattice size
     density = 0.5  # Initial particle density
-    T = 0.4  # Temperature
-    n_sweeps_eq = 200  # Number of sweeps to equilibrate
+    T = 0.8  # Temperature
+    n_sweeps_eq = 100  # Number of sweeps to equilibrate
     n_sweeps_per_meas = 10  # Sweeps between measurements
     n_meas = 200  # Number of measurements
+    print(f"Temperature=",T,"L=",L)   # Echo run parameters
 
     # Initialize lattice with random particle configuration
+    np.random.seed(42) 
     lattice = (np.random.rand(L, L) < density).astype(np.uint8)
+    print("Initial energy=",compute_total_energy(lattice, L))
     total_accept = 0
     total_attempt = 0
 
@@ -166,7 +170,7 @@ if __name__ == "__main__":
             a, b = sweep_with_indices(lattice, L, T, indices)
             total_accept += a
             total_attempt += b
-        r_vals, g = compute_pair_correlation(lattice)
+        r_vals, g = compute_rdf(lattice)
         S = compute_structure_factor(lattice)
         if accum_g is None:
             accum_g = np.zeros_like(g)
@@ -181,6 +185,7 @@ if __name__ == "__main__":
         accum_energy += energy
         accum_energy_sq += energy ** 2
 
+
     # Average observables over measurements
     g_avg = accum_g / n_meas
     S_avg = accum_S / n_meas
@@ -188,25 +193,32 @@ if __name__ == "__main__":
 
     E_avg = accum_energy / n_meas
     E2_avg = accum_energy_sq / n_meas
+    print(f"E_avg=",E_avg)
+    print(f"E2_avg=",E2_avg)
     heat_capacity = (E2_avg - E_avg**2) / (T**2)
 
     print(f"Heat capacity per site: {heat_capacity / (L * L):.4f}")
 
 
     # Plot and save results
-    root_dir="/Users/phxnw/Dropbox/course-disordered-matter/Coursework/"
+    root_dir="/Users/phxnw/Dropbox/course-disordered-matter/quarto/phase-transitions/Coursework/"
+    os.makedirs(os.path.join(root_dir, "figures"), exist_ok=True)
+    os.makedirs(os.path.join(root_dir, "data"), exist_ok=True)
+    
     prefix = f"L{L}_rho{density:.2f}_T{T:.2f}"
 
     plt.figure()
     plt.plot(r_vals, g_avg)
+    plt.xlim(0,L/2)
     plt.xlabel("r")
     plt.ylabel("g(r)")
-    plt.title("Average Pair Correlation Function")
-    plt.savefig(root_dir+f"figures/{prefix}_pair_correlation.pdf")
+    plt.title(f"Average radial distribution function: T={T:.2f}, L={L:.0f}")
+
+    plt.savefig(root_dir+f"figures/{prefix}_radial_distribution.pdf")
 
     plt.figure()
     plt.imshow(S_avg, origin="lower")
-    plt.title("2D Structure Factor S(k)")
+    plt.title(f"2D Structure Factor S(k): T={T:.2f}, L={L:.0f}")
     plt.colorbar()
     plt.savefig(root_dir + f"figures/{prefix}_structure_factor_2d.pdf")
 
@@ -214,7 +226,7 @@ if __name__ == "__main__":
     plt.plot(r_S, S_rad)
     plt.xlabel("k")
     plt.ylabel("S(k)")
-    plt.title("Radial Average of Structure Factor")
+    plt.title(f"Radial Average of Structure Factor: T={T:.2f}, L={L:.0f}")
     plt.savefig(root_dir + f"figures/{prefix}_structure_factor_radial.pdf")
 # Write out structure factor for analysis.
     output_path = root_dir + f"data/{prefix}_structure_factor_radial.csv"
@@ -223,7 +235,7 @@ if __name__ == "__main__":
     plt.figure()
     plt.imshow(lattice, cmap="gray")
     plt.axis("off")
-    plt.title("Final Lattice Configuration")
+    plt.title(f"Final Lattice Configuration: T={T:.2f}, L={L:.0f}")
     plt.savefig(root_dir + f"figures/{prefix}_final_lattice.pdf")
 
     plt.show()
